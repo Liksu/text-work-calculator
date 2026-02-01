@@ -11,7 +11,7 @@ export function TariffItem({ tariff, onUpdate, onRemove }: TariffItemProps) {
   return (
     <Card withBorder padding="sm">
       <TextInput
-        placeholder="e.g., English → Ukrainian"
+        placeholder="e.g., Standard rate"
         value={tariff.label}
         onChange={e => onUpdate({ label: e.currentTarget.value })}
         mb="xs"
@@ -24,16 +24,16 @@ export function TariffItem({ tariff, onUpdate, onRemove }: TariffItemProps) {
           min={1}
         />
         <NumberInput
-          label="Translation price"
-          value={tariff.translationPrice}
-          onChange={v => onUpdate({ translationPrice: Number(v) || 0 })}
+          label="New text price"
+          value={tariff.newTextPrice}
+          onChange={v => onUpdate({ newTextPrice: Number(v) || 0 })}
           min={0}
           decimalScale={2}
         />
         <NumberInput
-          label="Typing price"
-          value={tariff.typingPrice}
-          onChange={v => onUpdate({ typingPrice: Number(v) || 0 })}
+          label="Reused text price"
+          value={tariff.reusedTextPrice}
+          onChange={v => onUpdate({ reusedTextPrice: Number(v) || 0 })}
           min={0}
           decimalScale={2}
         />

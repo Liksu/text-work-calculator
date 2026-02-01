@@ -17,7 +17,7 @@ export function LanguagePairSelector({ tariffs, selectedId, onChange }: Language
 
   return (
     <Select
-      label="Language pair"
+      label="Tariff"
       data={data}
       value={selectedId}
       onChange={onChange}

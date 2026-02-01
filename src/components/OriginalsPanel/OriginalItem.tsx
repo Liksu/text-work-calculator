@@ -27,7 +27,7 @@ export function OriginalItemCard({
       <TextAreaWithDrop
         value={text}
         onChange={onChange}
-        placeholder="Paste original (non-translated) text here"
+        placeholder="Paste reused text here"
         minRows={4}
         normalization={normalization}
         countSpaces={countSpaces}

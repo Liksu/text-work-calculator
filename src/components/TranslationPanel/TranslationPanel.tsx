@@ -19,14 +19,14 @@ export function TranslationPanel({ text, onChange, normalization, countSpaces }:
       <TextAreaWithDrop
         value={text}
         onChange={onChange}
-        placeholder="Paste translated text from Word here, or drop a .docx/.md/.txt file"
+        placeholder="Paste your text here, or drop a .docx/.pdf/.md/.txt file"
         minRows={12}
         normalization={normalization}
         countSpaces={countSpaces}
         label={(statusText) => (
           <Group justify="space-between">
             <Group gap="xs">
-              <Text size="sm" fw={500}>Translation</Text>
+              <Text size="sm" fw={500}>Full text</Text>
               {statusText && <Text size="xs" c="dimmed">{statusText}</Text>}
             </Group>
             <Group gap="xs">

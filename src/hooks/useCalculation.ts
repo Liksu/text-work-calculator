@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import type { Settings, OriginalItem, CalculationResult } from '../types';
+import type { Settings, ReusedItem, CalculationResult } from '../types';
 import { calculate } from '../utils/calculate';
 
 export function useCalculation(
-  translationText: string,
-  originals: OriginalItem[],
+  text: string,
+  reusedItems: ReusedItem[],
   settings: Settings,
   selectedTariffId: string | null,
 ): CalculationResult {
@@ -14,11 +14,11 @@ export function useCalculation(
       : null;
 
     return calculate(
-      translationText,
-      originals.map(o => o.text),
+      text,
+      reusedItems.map(o => o.text),
       settings.normalization,
       settings.countSpaces,
       tariff,
     );
-  }, [translationText, originals, settings, selectedTariffId]);
+  }, [text, reusedItems, settings, selectedTariffId]);
 }

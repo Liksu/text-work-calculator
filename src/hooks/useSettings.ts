@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { Settings, Tariff, NormalizationOptions } from '../types';
 import { DEFAULT_SETTINGS } from '../constants/defaults';
 
-const STORAGE_KEY = 'translation-calculator-settings';
+const STORAGE_KEY = 'text-work-calculator-settings';
 
 function loadSettings(): Settings {
   try {

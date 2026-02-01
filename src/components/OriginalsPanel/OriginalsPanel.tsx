@@ -1,10 +1,10 @@
 import { Button, Stack, Text } from '@mantine/core';
 import { IconPlus } from '@tabler/icons-react';
-import type { OriginalItem, NormalizationOptions } from '../../types';
+import type { ReusedItem, NormalizationOptions } from '../../types';
 import { OriginalItemCard } from './OriginalItem';
 
 interface OriginalsPanelProps {
-  originals: OriginalItem[];
+  items: ReusedItem[];
   onAdd: () => void;
   onUpdate: (id: string, text: string) => void;
   onRemove: (id: string) => void;
@@ -13,7 +13,7 @@ interface OriginalsPanelProps {
 }
 
 export function OriginalsPanel({
-  originals,
+  items,
   onAdd,
   onUpdate,
   onRemove,
@@ -22,15 +22,15 @@ export function OriginalsPanel({
 }: OriginalsPanelProps) {
   return (
     <Stack gap="sm">
-      <Text size="sm" fw={500}>Original (retyped) texts</Text>
+      <Text size="sm" fw={500}>Reused texts</Text>
 
-      {originals.length === 0 && (
+      {items.length === 0 && (
         <Text size="xs" c="dimmed" fs="italic">
-          Click "Add original text" if part of the document wasn't translated
+          Add reused text blocks that shouldn't count as new work
         </Text>
       )}
 
-      {originals.map(item => (
+      {items.map(item => (
         <OriginalItemCard
           key={item.id}
           id={item.id}
@@ -48,7 +48,7 @@ export function OriginalsPanel({
         leftSection={<IconPlus size={16} />}
         onClick={onAdd}
       >
-        Add original text
+        Add reused text
       </Button>
     </Stack>
   );

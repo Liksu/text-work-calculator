@@ -2,8 +2,8 @@ export interface Tariff {
   id: string;
   label: string;
   charsPerSheet: number;
-  translationPrice: number;
-  typingPrice: number;
+  newTextPrice: number;
+  reusedTextPrice: number;
 }
 
 export interface NormalizationOptions {
@@ -21,18 +21,18 @@ export interface Settings {
   countSpaces: boolean;
 }
 
-export interface OriginalItem {
+export interface ReusedItem {
   id: string;
   text: string;
 }
 
 export interface CalculationResult {
   totalChars: number;
-  originalsChars: number;
-  translationChars: number;
+  newTextChars: number;
+  reusedChars: number;
   price: {
-    translation: number;
-    typing: number;
+    newText: number;
+    reused: number;
     total: number;
   } | null;
 }

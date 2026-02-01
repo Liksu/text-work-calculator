@@ -25,11 +25,11 @@ export function Header({
     <Stack gap="sm">
       <Group justify="space-between" align="flex-start">
         <div>
-          <Title order={2}>Translation Cost Calculator</Title>
+          <Title order={2}>Text Work Calculator</Title>
           <Text size="sm" c="dimmed" maw={600} mt={4}>
-            Calculate translation costs fairly. Paste your translated document, then add any
-            original text that wasn't translated (just retyped). The calculator normalizes
-            whitespace and separates translation from retyping costs.
+            Calculate text work costs fairly. Paste your text, then mark any reused
+            parts that shouldn't count as new work. The calculator normalizes whitespace
+            and separates new text from reused text for fair pricing.
           </Text>
         </div>
         <Group gap="sm" align="center" wrap="nowrap">
