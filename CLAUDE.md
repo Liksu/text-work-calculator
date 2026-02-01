@@ -1,15 +1,15 @@
-# Translation Cost Calculator
+# Text Work Calculator
 
 ## Project Overview
 
-A web-based calculator for calculating translation costs. Translators charge per character (with or without spaces), but documents often contain:
+A web-based calculator for fair text work pricing. Whether it's translation, copywriting, editing, or transcription — documents often contain:
 - Excessive whitespace used for formatting (tabs, multiple line breaks)
-- Original text that wasn't translated (just retyped) — charged at a lower rate
+- Reused text that shouldn't be charged at the full rate
 
 This tool helps calculate fair costs by:
 1. Normalizing whitespace according to configurable rules
-2. Separating translated text from retyped original text
-3. Calculating prices based on configurable tariffs per language pair
+2. Separating new text from reused text
+3. Calculating prices based on configurable tariffs
 
 ## Tech Stack
 
@@ -19,13 +19,14 @@ This tool helps calculate fair costs by:
 - **@tabler/icons-react** for icons
 - **mammoth** for extracting text from .docx files
 - **marked** for parsing Markdown files
+- **pdfjs-dist** for extracting text from PDF files (lazy-loaded via dynamic import)
 - **localStorage** for persisting settings
 
 ### Installation
 
 ```bash
 npm create vite@latest . -- --template react-ts
-npm install @mantine/core @mantine/hooks @mantine/notifications @tabler/icons-react mammoth marked
+npm install @mantine/core @mantine/hooks @mantine/notifications @tabler/icons-react mammoth marked pdfjs-dist
 npm install -D @types/marked
 ```
 
@@ -86,6 +87,8 @@ src/
 │   └── index.ts
 └── constants/
     └── defaults.ts
+public/
+└── favicon.svg
 ```
 
 ## Data Types
@@ -95,10 +98,10 @@ src/
 
 export interface Tariff {
   id: string;
-  label: string;              // Free text, e.g., "English → Ukrainian"
+  label: string;              // Free text, e.g., "Standard rate"
   charsPerSheet: number;      // Characters per "sheet" (e.g., 1800)
-  translationPrice: number;   // Price per sheet for translation
-  typingPrice: number;        // Price per sheet for retyping original
+  newTextPrice: number;       // Price per sheet for new text
+  reusedTextPrice: number;    // Price per sheet for reused text
 }
 
 export interface NormalizationOptions {
@@ -116,19 +119,19 @@ export interface Settings {
   countSpaces: boolean;         // Whether to count spaces (toggle in Settings modal)
 }
 
-export interface OriginalItem {
+export interface ReusedItem {
   id: string;
   text: string;
 }
 
 export interface CalculationResult {
   totalChars: number;           // Full text character count (after normalization)
-  originalsChars: number;       // Sum of all original parts
-  translationChars: number;     // totalChars - originalsChars
+  newTextChars: number;         // totalChars - reusedChars
+  reusedChars: number;          // Sum of all reused parts
 
   price: {                      // null if no tariff selected
-    translation: number;
-    typing: number;
+    newText: number;
+    reused: number;
     total: number;
   } | null;
 }
@@ -166,7 +169,6 @@ export function normalize(text: string, options: NormalizationOptions, countSpac
   let result = text;
 
   if (options.removeZeroWidth) {
-    // Remove zero-width characters: \u200B, \u200C, \u200D, \u200E, \u200F, \uFEFF, \u00AD, \u2060, \u180E
     result = result.replace(/[\u200B\u200C\u200D\u200E\u200F\uFEFF\u00AD\u2060\u180E]/g, '');
   }
 
@@ -182,7 +184,6 @@ export function normalize(text: string, options: NormalizationOptions, countSpac
   }
 
   if (options.collapseNewlines) {
-    // Collapse all \r and \n sequences into single \n
     result = result.replace(/[\r\n]+/g, '\n');
   }
 
@@ -204,7 +205,7 @@ export function normalize(text: string, options: NormalizationOptions, countSpac
 ```
 
 Key design decisions:
-- `collapseSpaces` uses aggressive `/\s+/g` — collapses everything including mixed whitespace/newline sequences into a single space. This matches manual calculation (`text.replaceAll(/\s+/g, ' ')`).
+- `collapseSpaces` uses aggressive `/\s+/g` — collapses everything including mixed whitespace/newline sequences into a single space.
 - `collapseSpaces` first removes spaces between formatting chars (`"- - -"` → `"---"`) so `trimRepeatedChars` can then collapse them.
 - `trimRepeatedChars` only targets formatting characters `[-=_*.~]`, never letters or digits.
 - `collapseNewlines` uses `/[\r\n]+/g` — handles Windows `\r\n`, Mac `\r`, and Unix `\n` line endings.
@@ -215,25 +216,21 @@ Key design decisions:
 import mammoth from 'mammoth';
 import { marked } from 'marked';
 
-export async function extractFromDocx(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value;
-}
+export async function extractFromDocx(file: File): Promise<string> { ... }
+export async function extractFromMd(file: File): Promise<string> { ... }
 
-export async function extractFromMd(file: File): Promise<string> {
-  const text = await file.text();
-  const html = await marked.parse(text);
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || '';
+export async function extractFromPdf(file: File): Promise<string> {
+  // Dynamic import — pdfjs-dist loaded only when PDF is opened
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  // Extract text page by page
 }
 
 export async function extractFromFile(file: File): Promise<string> {
   const ext = file.name.split('.').pop()?.toLowerCase();
-
   if (ext === 'docx') return extractFromDocx(file);
   if (ext === 'md') return extractFromMd(file);
+  if (ext === 'pdf') return extractFromPdf(file);
   return file.text();
 }
 ```
@@ -242,34 +239,34 @@ export async function extractFromFile(file: File): Promise<string> {
 
 ```typescript
 export function calculate(
-  translationText: string,
-  originals: string[],
+  text: string,
+  reusedTexts: string[],
   normalization: NormalizationOptions,
   countSpaces: boolean,
   tariff: Tariff | null
 ): CalculationResult {
-  const normalizedTotal = normalize(translationText, normalization, countSpaces);
-  const normalizedOriginals = originals.map(t => normalize(t, normalization, countSpaces));
+  const normalizedTotal = normalize(text, normalization, countSpaces);
+  const normalizedReused = reusedTexts.map(t => normalize(t, normalization, countSpaces));
 
   const totalChars = normalizedTotal.length;
-  const originalsChars = normalizedOriginals.reduce((sum, t) => sum + t.length, 0);
-  const translationChars = Math.max(0, totalChars - originalsChars);
+  const reusedChars = normalizedReused.reduce((sum, t) => sum + t.length, 0);
+  const newTextChars = Math.max(0, totalChars - reusedChars);
 
   if (!tariff) {
-    return { totalChars, originalsChars, translationChars, price: null };
+    return { totalChars, newTextChars, reusedChars, price: null };
   }
 
-  const translationSheets = translationChars / tariff.charsPerSheet;
-  const typingSheets = originalsChars / tariff.charsPerSheet;
+  const newTextSheets = newTextChars / tariff.charsPerSheet;
+  const reusedSheets = reusedChars / tariff.charsPerSheet;
 
   return {
     totalChars,
-    originalsChars,
-    translationChars,
+    newTextChars,
+    reusedChars,
     price: {
-      translation: translationSheets * tariff.translationPrice,
-      typing: typingSheets * tariff.typingPrice,
-      total: translationSheets * tariff.translationPrice + typingSheets * tariff.typingPrice,
+      newText: newTextSheets * tariff.newTextPrice,
+      reused: reusedSheets * tariff.reusedTextPrice,
+      total: newTextSheets * tariff.newTextPrice + reusedSheets * tariff.reusedTextPrice,
     },
   };
 }
@@ -288,18 +285,16 @@ Use `@tabler/icons-react`:
 ### Layout
 
 - **Desktop**: Two columns (`Grid` with `sm: 7` / `sm: 5` spans)
-  - Left (wider): Translation text area
-  - Right: Original parts (vertically stacked)
+  - Left (wider): Full text area
+  - Right: Reused text parts (vertically stacked)
 - **Mobile**: Single column (both `base: 12`)
-  - Top: Translation text area
-  - Bottom: Original parts
 - **Breakpoint**: Mantine's `sm` breakpoint (768px)
 
 ### Header
 
-- App title: "Translation Cost Calculator"
+- App title: "Text Work Calculator"
 - Brief description (2-3 sentences)
-- Top-right: Language pair selector + Settings button (gear icon) side by side
+- Top-right: Tariff selector + Settings button (gear icon) side by side
 - Results panel below (see ResultsPanel section)
 
 ### ResultsPanel
@@ -307,18 +302,18 @@ Use `@tabler/icons-react`:
 Two layouts depending on whether a tariff is selected:
 
 **Without tariff** — 3 columns, 1 row:
-| Translated | Original (retyped) | Total characters |
+| New text | Reused text | Total characters |
 
 **With tariff** — 2 columns, 3 rows:
-| Translated         | Translation cost |
-| Original (retyped) | Retyping cost    |
-| Total characters   | Total cost       |
+| New text         | New text cost    |
+| Reused text      | Reused text cost |
+| Total characters | Total cost       |
 
-Order is always: translated, original (retyped), total.
+Order is always: new text, reused text, total.
 
-Warning message shown if originals > total.
+Warning message shown if reused > total.
 
-### Language Pair Selector
+### Tariff Selector
 
 - **0 tariffs**: hidden
 - **1 tariff**: shown, disabled (auto-selected)
@@ -339,20 +334,20 @@ Auto-selection logic in `App.tsx`: if exactly 1 tariff exists, `effectiveTariffI
   - Overlay has `pointerEvents: 'none'` so it doesn't interfere with drop events
   - No flickering — no per-element dragEnter/dragLeave tracking
 - On mobile: no drag-drop overlay, shows "Upload file" button instead
-- Accepts: .docx, .md, .txt files
+- Accepts: .docx, .pdf, .md, .txt files
 
-### Translation Panel (Left/Top)
+### Full Text Panel (Left/Top)
 
 - Uses `TextAreaWithDrop` with render function for label
-- Label row: "Translation" + statusText on the left, char count + clear button on the right
+- Label row: "Full text" + statusText on the left, char count + clear button on the right
 - `minRows={12}`
 
-### Originals Panel (Right/Bottom)
+### Reused Texts Panel (Right/Bottom)
 
-- Title "Original texts" at top
-- Empty state helper text
-- List of original items (each in a `Card` with `TextAreaWithDrop`)
-- **"Add original text" button at the bottom** (below all items)
+- Title "Reused texts" at top
+- Empty state: "Add reused text blocks that shouldn't count as new work"
+- List of reused items (each in a `Card` with `TextAreaWithDrop`)
+- **"Add reused text" button at the bottom** (below all items)
 - Each item label row: char count + statusText on the left, remove button on the right
 
 ### Settings Modal
@@ -362,13 +357,13 @@ Two tabs:
 **Tariffs tab:**
 - "Add tariff" button
 - List of tariffs, each showing:
-  - Text input for label (placeholder: "e.g., English → Ukrainian")
-  - Number inputs in 3-column grid: characters per sheet (default: 1800), translation price, typing price
+  - Text input for label (placeholder: "e.g., Standard rate")
+  - Number inputs in 3-column grid: characters per sheet (default: 1800), new text price, reused text price
   - Delete button
 - If no tariffs: "Add a tariff to calculate prices"
 
 **Text normalization tab:**
-- **"Count spaces" Switch** (moved here from Header)
+- **"Count spaces" Switch**
 - Checkboxes for each normalization option:
   - "Collapse multiple spaces into one" (default: on)
   - "Collapse multiple line breaks into one" (default: on)
@@ -381,8 +376,7 @@ Two tabs:
 
 - Use Mantine's default theme
 - Clean, minimal design
-- Good contrast for accessibility
-- Responsive spacing
+- SVG favicon: blue document icon with text lines and `#` symbol (`public/favicon.svg`)
 
 ## Hooks
 
@@ -401,14 +395,14 @@ function useSettings(): {
 
 - Loads from localStorage on mount
 - Saves to localStorage on every change
-- localStorage key: `"translation-calculator-settings"`
+- localStorage key: `"text-work-calculator-settings"`
 
 ### useCalculation
 
 ```typescript
 function useCalculation(
-  translationText: string,
-  originals: OriginalItem[],
+  text: string,
+  reusedItems: ReusedItem[],
   settings: Settings,
   selectedTariffId: string | null
 ): CalculationResult
@@ -429,6 +423,7 @@ function useFileExtract(): {
 
 - Handles file extraction with loading state
 - Shows toast notifications on success/error
+- Supported: .docx, .pdf, .md, .txt
 
 ### useDocumentDrag
 
@@ -444,7 +439,7 @@ function useDocumentDrag(): boolean
 ## Edge Cases to Handle
 
 - Empty texts (show 0, not errors)
-- Originals sum > total (show 0 for translation, show warning in ResultsPanel)
+- Reused sum > total (show 0 for new text, show warning in ResultsPanel)
 - Very large files (show loading state via `extracting`)
 - Invalid file types (show error toast)
 - No tariffs configured (hide price column, show hint text)
@@ -460,24 +455,24 @@ function useDocumentDrag(): boolean
 
 ## App State Persistence
 
-Save to localStorage (key: `"translation-calculator-state"`):
+Save to localStorage (key: `"text-work-calculator-state"`):
 - `selectedTariffId` — remember which tariff was selected
 
-Settings are saved separately (key: `"translation-calculator-settings"`).
+Settings are saved separately (key: `"text-work-calculator-settings"`).
 
-Text content (translation and originals) is NOT saved — fresh start on page reload.
+Text content (full text and reused items) is NOT saved — fresh start on page reload.
 
 ## UI Texts
 
 ### Placeholders
 
-- Translation textarea: "Paste translated text from Word here, or drop a .docx/.md/.txt file"
-- Original textarea: "Paste original (non-translated) text here"
-- Tariff label input: "e.g., English → Ukrainian"
+- Full text textarea: "Paste your text here, or drop a .docx/.pdf/.md/.txt file"
+- Reused text textarea: "Paste reused text here"
+- Tariff label input: "e.g., Standard rate"
 
 ### Buttons
 
-- Add original: "Add original text"
+- Add reused: "Add reused text"
 - Clear (tooltip): "Clear"
 - Remove (tooltip): "Remove"
 - Upload file: "Upload file"
@@ -488,25 +483,32 @@ Text content (translation and originals) is NOT saved — fresh start on page re
 ### Empty States
 
 - No text entered: Results show "0" for all values
-- No originals added: "Click 'Add original text' if part of the document wasn't translated"
+- No reused items: "Add reused text blocks that shouldn't count as new work"
 - No tariffs: "Set up tariffs in settings to calculate prices"
 
 ### Results Labels
 
-- "Translated"
-- "Original (retyped)"
+- "New text"
+- "Reused text"
 - "Total characters"
-- "Translation cost" / "Retyping cost" / "Total cost"
+- "New text cost" / "Reused text cost" / "Total cost"
 
 ### Notifications/Toasts
 
 - File loaded: "File loaded successfully"
-- Invalid file: "Unsupported file type. Please use .docx, .md, or .txt"
+- Invalid file: "Unsupported file type. Please use .docx, .pdf, .md, or .txt"
 - File error: "Failed to read file"
 
 ### Header Description
 
-"Calculate translation costs fairly. Paste your translated document, then add any original text that wasn't translated (just retyped). The calculator normalizes whitespace and separates translation from retyping costs."
+"Calculate text work costs fairly. Paste your text, then mark any reused parts that shouldn't count as new work. The calculator normalizes whitespace and separates new text from reused text for fair pricing."
+
+## Deployment
+
+- GitHub Pages via GitHub Actions (`.github/workflows/deploy.yml`)
+- Builds on every push to `main`
+- Vite `base`: `/text-work-calculator/`
+- Enable in repo Settings > Pages > Source: **GitHub Actions**
 
 ## Notes
 
